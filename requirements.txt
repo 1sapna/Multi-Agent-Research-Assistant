@@ -1,0 +1,23 @@
+# Core dependencies
+streamlit==1.28.1
+python-dotenv==1.0.0
+
+# Google Gemini AI
+google-generativeai==0.3.2
+
+# Search functionality
+tavily-python==0.3.3
+
+# Data handling and validation
+pydantic==2.5.2
+
+# LangChain (only for Tavily search tool)
+langchain-community==0.0.10
+
+# Utilities
+requests==2.31.0
+urllib3==2.1.0
+
+# Optional: For better performance
+numpy==1.24.3
+pandas==2.0.3
