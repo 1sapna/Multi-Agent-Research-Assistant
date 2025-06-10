@@ -41,7 +41,7 @@ def check_gemini_api_status():
         return False, "API key not found"
     
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         response = model.generate_content("Hi")
         return True, "API key is valid and working"
     except Exception as e:
