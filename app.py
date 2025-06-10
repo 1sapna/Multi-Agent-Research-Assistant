@@ -139,7 +139,7 @@ class AgentState(BaseModel):
     iteration_count: int = Field(default=0, description="Count of iterations through the graph")
 
 # Function to call Gemini API
-def call_gemini(prompt: str, model_name: str = "gemini-pro") -> str:
+def call_gemini(prompt: str, model_name: str = "gemini-1.5-flash-latest") -> str:
     """Call Gemini API with error handling"""
     try:
         model = genai.GenerativeModel(model_name)
