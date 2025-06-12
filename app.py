@@ -15,7 +15,7 @@ if gemini_api_key:
 # Function to check Gemini API status
 def check_gemini_api_status():
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest'")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         response = model.generate_content("Say hi")
         return True, "Active"
     except Exception as e:
@@ -62,7 +62,7 @@ def run_multi_agent_research(query):
 
     try:
         # Agent 1: Coordination Agent
-        model = genai.GenerativeModel("gemini-1.5-flash-latest'")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         coord_prompt = f"""Break this query into smaller sub-questions for research:
 
 Query: {query}
