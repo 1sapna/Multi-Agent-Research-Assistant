@@ -30,7 +30,7 @@ A powerful, AI-powered research tool that uses **Google Gemini 1.5 Flash** and *
 ## 📸 Screenshots
 
 ### 🏠 Home Page
-![Home Page](Screenshot 2025-06-12 173943.png)
+![Home Page](home.png)
 
 ---
 
