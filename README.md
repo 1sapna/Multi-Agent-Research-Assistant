@@ -33,24 +33,22 @@ A powerful, AI-powered research tool that uses **Google Gemini 1.5 Flash** and *
 ![Home Page](home.png)
 
 ---
+### 🎯 Final Answer
+![Final Answer](research.png)
 
+---
 ### 📋 Research Plan
-![Research Plan](images/plan.png)
+![Research Plan](plan.png)
 
 ---
 
 ### 🔗 Sources Collected
-![Sources](images/sources.png)
-
----
-
-### 🎯 Final Answer
-![Final Answer](images/final-answer.png)
+![Sources](source.png)
 
 ---
 
 ### 📥 Download Report
-![Download](images/download.png)
+![Download](report.png)
 
 ---
 
