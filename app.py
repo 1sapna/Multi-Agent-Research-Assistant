@@ -1,37 +1,147 @@
-# ... [IMPORTS AND SETUP – Unchanged] ...
+import streamlit as st
+import requests
+import google.generativeai as genai
+from datetime import datetime
+import time
 
-# Page configuration
+# Load secrets
+gemini_api_key = st.secrets.get("GEMINI_API_KEY", "")
+tavily_api_key = st.secrets.get("TAVILY_API_KEY", "")
+
+# Configure Gemini API
+if gemini_api_key:
+    genai.configure(api_key=gemini_api_key)
+
+# Function to check Gemini API status
+def check_gemini_api_status():
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content("Say hi")
+        return True, "Active"
+    except Exception as e:
+        return False, str(e)
+
+# Check if both APIs are ready
+def are_api_keys_ready():
+    if not gemini_api_key:
+        return False, "Gemini API Key missing"
+    if not tavily_api_key:
+        return False, "Tavily API Key missing"
+    ok, msg = check_gemini_api_status()
+    if not ok:
+        return False, f"Gemini error: {msg}"
+    return True, "All APIs loaded"
+
+# Tavily search function
+def search_tavily(query, num_results=3):
+    try:
+        url = "https://api.tavily.com/search"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "api_key": tavily_api_key,
+            "query": query,
+            "search_depth": "advanced",
+            "include_answer": False,
+            "include_images": False,
+            "max_results": num_results
+        }
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json().get("results", [])
+    except Exception as e:
+        return []
+
+# Multi-agent research system
+def run_multi_agent_research(query):
+    results = {
+        "research_plan": [],
+        "extracted_info": [],
+        "final_answer": "",
+        "errors": []
+    }
+
+    try:
+        # Agent 1: Coordination Agent
+        model = genai.GenerativeModel("gemini-pro")
+        coord_prompt = f"""Break this query into smaller sub-questions for research:
+
+Query: {query}
+
+Respond with a numbered list."""
+        coord_response = model.generate_content(coord_prompt)
+        questions = coord_response.text.strip().split("\n")
+        sub_questions = [q.split(".", 1)[1].strip() if "." in q else q for q in questions]
+        results["research_plan"] = sub_questions
+
+        # Agent 2: Research Agent
+        for sub_q in sub_questions:
+            search_results = search_tavily(sub_q, num_results=3)
+            for r in search_results:
+                results["extracted_info"].append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "content": r.get("content", ""),
+                    "relevance_score": r.get("score", 0)
+                })
+            time.sleep(1)
+
+        # Agent 3: Synthesis Agent
+        sources_text = ""
+        for i, info in enumerate(results["extracted_info"], 1):
+            sources_text += f"Source {i}:\nTitle: {info['title']}\nURL: {info['url']}\nContent: {info['content'][:1000]}\n\n"
+
+        synthesis_prompt = f"""Based on the following research sources, write a draft response to the query:
+
+Query: {query}
+
+Sources:
+{sources_text}
+
+Write a markdown-formatted draft."""
+        synth_response = model.generate_content(synthesis_prompt)
+        draft = synth_response.text
+
+        # Agent 4: Finalization Agent
+        final_prompt = f"""Polish and organize the following draft into a clear, well-formatted final answer using markdown:
+
+Query: {query}
+
+Draft:
+{draft}
+
+Final polished version:"""
+        final_response = model.generate_content(final_prompt)
+        results["final_answer"] = final_response.text
+
+    except Exception as e:
+        results["errors"].append(str(e))
+
+    return results
+
+# PAGE SETUP
 st.set_page_config(
     page_title="Multi-Agent-Research-Assistant",
     page_icon="🔍",
     layout="wide"
 )
 
-# Sidebar with API key status
+# SIDEBAR
 with st.sidebar:
     st.title("API Configuration")
-    
-    # Check and display Gemini API status
     if gemini_api_key:
-        is_valid, status_msg = check_gemini_api_status()
-        if is_valid:
-            st.success(f"✅ Gemini API Key: {status_msg}")
+        ok, msg = check_gemini_api_status()
+        if ok:
+            st.success(f"✅ Gemini API Key: {msg}")
         else:
-            st.error(f"❌ Gemini API Key: {status_msg}")
-            
-            if "invalid" in status_msg.lower():
-                st.warning("""**To fix this:**
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Copy and paste it in your secrets""")
+            st.error(f"❌ Gemini API Error: {msg}")
     else:
         st.error("❌ Gemini API Key not found")
-        
+
     if tavily_api_key:
         st.success("✅ Tavily API Key loaded")
     else:
         st.error("❌ Tavily API Key not found")
-    
+
     st.markdown("---")
     st.markdown("""## About This App
 
@@ -54,21 +164,17 @@ with st.sidebar:
 This approach ensures accurate, multi-perspective, and logically structured answers to complex queries.
 """)
 
-# ... [STATE SCHEMA, API FUNCTIONS, PROCESSING LOGIC – Unchanged] ...
-
-# Main app
+# MAIN PAGE
 st.title("🔍 Multi-Agent-Research-Assistant")
 st.markdown("### 🤖 Powered by Google Gemini API + Tavily Search")
 st.write("Enter a research query and the AI agents will gather and synthesize information from the web.")
 
-# Show API status
-api_ready, api_status = are_api_keys_ready()
+api_ready, status = are_api_keys_ready()
 
 if not api_ready:
-    st.error(f"⚠️ Setup required: {api_status}")
+    st.error(f"⚠️ Setup required: {status}")
     st.info("Please check the sidebar for API configuration.")
 
-# Add some example queries
 st.markdown("**💡 Example queries:**")
 st.markdown("- What are the latest developments in renewable energy technology?")
 st.markdown("- How does artificial intelligence impact healthcare in 2024?")
@@ -79,83 +185,60 @@ query = st.text_area("Research Query", height=100, placeholder="Enter your resea
 
 if st.button("🚀 Start Research", type="primary", disabled=not api_ready):
     if not api_ready:
-        st.error(f"Cannot start research: {api_status}")
+        st.error(f"Cannot start research: {status}")
     else:
         with st.spinner("🔍 AI agents are researching your query..."):
-            try:
-                # ... [Progress Bar and Processing Logic – Unchanged] ...
+            result = run_multi_agent_research(query)
 
-                # Display results in tabs
-                tab1, tab2, tab3, tab4 = st.tabs(["📋 Final Answer", "📝 Research Plan", "🔗 Sources", "⚠️ Debug Info"])
-                
-                with tab1:
-                    if result["final_answer"]:
-                        st.markdown("## 🎯 Research Results")
-                        st.markdown(result["final_answer"])
-                        
-                        st.download_button(
-                            label="📥 Download Research Report",
-                            data=result["final_answer"],
-                            file_name=f"research_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                            mime="text/markdown"
-                        )
-                    else:
-                        st.warning("No answer generated due to errors. Check the Debug Info tab for details.")
-                    
-                with tab2:
-                    st.markdown("## 📋 Research Strategy")
-                    if result["research_plan"]:
-                        st.markdown("The AI coordination agent created this research plan:")
-                        for i, question in enumerate(result["research_plan"], 1):
-                            st.markdown(f"**{i}.** {question}")
-                    else:
-                        st.info("No research plan generated.")
-                
-                with tab3:
-                    st.markdown("## 🔗 Source Information")
-                    if result["extracted_info"]:
-                        st.markdown(f"**📊 Number of sources analyzed:** {len(result['extracted_info'])}")
-                        st.markdown("---")
-                        
-                        for i, info in enumerate(result["extracted_info"], 1):
-                            with st.expander(f"📄 Source {i}: {info['title']}", expanded=False):
-                                col1, col2 = st.columns([3, 1])
-                                with col1:
-                                    st.markdown(f"**🔗 URL:** [{info['url']}]({info['url']})")
-                                with col2:
-                                    st.markdown(f"**⭐ Score:** {info['relevance_score']}")
-                                
-                                st.markdown("**📝 Content Preview:**")
-                                st.markdown(f"_{info['content'][:200]}..._")
-                    else:
-                        st.info("No sources were retrieved.")
-                
-                with tab4:
-                    st.markdown("## ⚠️ Debug Information")
-                    if result["errors"]:
-                        st.error("Issues encountered during research:")
-                        for i, error in enumerate(result["errors"], 1):
-                            st.error(f"**{i}.** {error}")
-                    else:
-                        st.success("✅ No errors encountered during research!")
-                    
-                    st.markdown("### 📊 Research Statistics")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Research Questions", len(result["research_plan"]))
-                    with col2:
-                        st.metric("Sources Found", len(result["extracted_info"]))
-                    with col3:
-                        st.metric("Errors", len(result["errors"]))
-                
-            except Exception as e:
-                st.error(f"❌ Error running research system: {str(e)}")
-                st.error("Please check your API keys and try again.")
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Final Answer", "📝 Research Plan", "🔗 Sources", "⚠️ Debug Info"])
 
-# Footer
+        with tab1:
+            if result["final_answer"]:
+                st.markdown("## 🎯 Research Results")
+                st.markdown(result["final_answer"])
+                st.download_button(
+                    label="📥 Download Research Report",
+                    data=result["final_answer"],
+                    file_name=f"research_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown"
+                )
+            else:
+                st.warning("No answer generated. Check Debug Info.")
+
+        with tab2:
+            st.markdown("## 📋 Research Strategy")
+            if result["research_plan"]:
+                for i, q in enumerate(result["research_plan"], 1):
+                    st.markdown(f"**{i}.** {q}")
+            else:
+                st.info("No research plan generated.")
+
+        with tab3:
+            st.markdown("## 🔗 Source Information")
+            if result["extracted_info"]:
+                st.markdown(f"**Sources used:** {len(result['extracted_info'])}")
+                for i, info in enumerate(result["extracted_info"], 1):
+                    with st.expander(f"📄 {info['title']}", expanded=False):
+                        st.markdown(f"🔗 [{info['url']}]({info['url']})")
+                        st.markdown(f"⭐ Score: {info['relevance_score']}")
+                        st.markdown(f"_Preview:_\n{info['content'][:300]}...")
+            else:
+                st.info("No sources found.")
+
+        with tab4:
+            st.markdown("## ⚠️ Debug Info")
+            if result["errors"]:
+                for err in result["errors"]:
+                    st.error(err)
+            else:
+                st.success("✅ No errors detected.")
+            st.metric("Questions", len(result["research_plan"]))
+            st.metric("Sources", len(result["extracted_info"]))
+            st.metric("Errors", len(result["errors"]))
+
+# FOOTER
 st.markdown("---")
 st.markdown("""<div style='text-align: center'>
     <p>🤖 <strong>Powered by Google Gemini + Tavily Search</strong></p>
     <p>Built with ❤️ using Streamlit</p>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
